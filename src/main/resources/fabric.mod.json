@@ -1,0 +1,38 @@
+{
+    "schemaVersion": 1,
+    "id": "mc-chat-tts",
+    "version": "${version}",
+    "name": "MC Chat TTS",
+    "description": "마인크래프트 한국어 채팅 TTS 모드",
+    "authors": [
+        "urakamza"
+    ],
+    "contact": {
+        "homepage": "https://github.com/urakamza"
+    },
+    "license": "MIT",
+    "icon": "assets/mc-chat-tts/icon.png",
+    "environment": "client",
+    "entrypoints": {
+        "main": [
+            "kr.urakamza.mcchattts.MCChatTTS"
+        ],
+        "client": [
+            "kr.urakamza.mcchattts.MCChatTTSClient"
+        ],
+        "modmenu": [
+            "kr.urakamza.mcchattts.ModMenuIntegration"
+        ]
+    },
+    "mixins": [
+        "mc-chat-tts.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=0.18.5",
+        "minecraft": "~26.1",
+        "java": ">=25",
+        "fabric-api": "*",
+        "cloth-config": "*",
+        "modmenu": "*"
+    }
+}
