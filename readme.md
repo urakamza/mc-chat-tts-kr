@@ -2,8 +2,6 @@
 
 채팅을 한국어 TTS로 읽어주는 Fabric 클라이언트 모드입니다.
 
-_이 모드는 AI의 도움을 받아 제작했습니다._
-
 ## 기능
 
 - Edge TTS / Google TTS / Windows SAPI 엔진 지원
