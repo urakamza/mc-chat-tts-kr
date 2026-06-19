@@ -148,10 +148,10 @@ public class TTSConfigScreen {
                 Component.literal("키 설정 열기"),
                 btn -> {
                     Minecraft mc = Minecraft.getInstance();
-                    mc.setScreen(new net.minecraft.client.gui.screens.options.controls.KeyBindsScreen(
+                    mc.setScreenAndShow(new net.minecraft.client.gui.screens.options.controls.KeyBindsScreen(
                         new Screen(Component.literal("")) {
                             @Override
-                            protected void init() { mc.setScreen(TTSConfigScreen.create(parent)); }
+                            protected void init() { mc.setScreenAndShow(TTSConfigScreen.create(parent)); }
                             @Override
                             public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float delta) {}
                         },
