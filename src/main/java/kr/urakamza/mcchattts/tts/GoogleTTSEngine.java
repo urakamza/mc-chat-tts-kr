@@ -12,6 +12,9 @@ import java.nio.charset.StandardCharsets;
 public class GoogleTTSEngine {
 
     public static byte[] synthesize(String text) {
+        if (text.length() > 200) {
+            text = text.substring(0, 200);
+        }
         try {
             String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8);
             String url = "https://translate.google.com/translate_tts?ie=UTF-8" +

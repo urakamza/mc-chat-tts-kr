@@ -11,10 +11,7 @@ public class SAPIEngine {
     private static final Object lock = new Object();
 
     public static void speak(String text, String voiceName, int speed) {
-        // SAPI Rate: -10 ~ 10, 우리 speed: -50 ~ 50 → 변환
         int sapiRate = Math.max(-10, Math.min(10, speed / 5));
-
-        // 텍스트에서 작은따옴표 이스케이프
         String safeText = text.replace("'", "''");
         String safeVoice = voiceName.replace("'", "''");
 
@@ -27,21 +24,26 @@ public class SAPIEngine {
             safeVoice, sapiRate, safeText
         );
 
+        Process p;
         try {
+            ProcessBuilder pb = new ProcessBuilder(
+                "powershell.exe",
+                "-WindowStyle", "Hidden",
+                "-NoProfile",
+                "-Command", script
+            );
+            pb.redirectErrorStream(true);
+            p = pb.start();
             synchronized (lock) {
-                ProcessBuilder pb = new ProcessBuilder(
-                    "powershell.exe",
-                    "-WindowStyle", "Hidden",
-                    "-NoProfile",
-                    "-Command", script
-                );
-                pb.redirectErrorStream(true);
-                currentProcess = pb.start();
-                currentProcess.waitFor(); // 재생 완료까지 블로킹
-                currentProcess = null;
+                currentProcess = p;
             }
+            p.waitFor(); // lock 밖에서 블로킹 → stop()이 언제든 접근 가능
         } catch (Exception e) {
             MCChatTTS.LOGGER.error("SAPI 재생 오류: {}", e.getMessage());
+        } finally {
+            synchronized (lock) {
+                currentProcess = null;
+            }
         }
     }
 

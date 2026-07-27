@@ -18,6 +18,7 @@ public class ChatListener {
         // 일반 채팅
         ClientReceiveMessageEvents.CHAT.register(
             (message, signedMessage, sender, params, receptionTimestamp) -> {
+                if(!TTSConfig.enabled) return;
                 String raw = message.getString();
                 Matcher m = CHAT_PATTERN.matcher(raw);
                 if (m.find()) {
@@ -29,6 +30,7 @@ public class ChatListener {
 
         // 시스템 메시지
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            if(!TTSConfig.enabled) return;
             if (overlay) return;
             String msg = message.getString();
 
@@ -50,6 +52,7 @@ public class ChatListener {
     }
 
     private static void handleChat(String nick, String chat) {
+        if(!TTSConfig.enabled) return;
         // 닉네임 필터
         if (!TTSConfig.nicknameFilter.isEmpty()) {
             String nickLower = nick.toLowerCase();

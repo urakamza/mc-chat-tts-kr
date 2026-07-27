@@ -14,6 +14,7 @@ public class TTSConfig {
             .getConfigDir().resolve("mc-chat-tts.json");
 
     // ===== 설정값 =====
+    public static boolean enabled = true;
     public static String engine = "Google";       // Google / Edge 남 / Edge 여
     public static int speed = 0;                   // -50 ~ 50
     public static float volume = 1.0f;
@@ -44,6 +45,7 @@ public class TTSConfig {
         try (Reader r = Files.newBufferedReader(CONFIG_PATH)) {
             ConfigData data = GSON.fromJson(r, ConfigData.class);
             if (data == null) return;
+            enabled = data.enabled;
             engine         = orDefault(data.engine, engine);
             speed          = data.speed;
             volume         = data.volume;
@@ -80,6 +82,7 @@ public class TTSConfig {
     public static void save() {
         try {
             ConfigData data      = new ConfigData();
+            data.enabled = enabled;
             data.engine          = engine;
             data.speed           = speed;
             data.volume          = volume;
@@ -111,6 +114,7 @@ public class TTSConfig {
 
     // JSON 직렬화용 내부 클래스
     private static class ConfigData {
+        boolean enabled = true;
         String engine = "Google";
         int speed = 0;
         float volume = 1.0f;

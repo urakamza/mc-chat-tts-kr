@@ -138,6 +138,7 @@ public class TTSConfigScreen {
 
             // ===== 기본 설정 =====
             ConfigCategory basic = builder.getOrCreateCategory(Component.literal("기본 설정"));
+            basic.addEntry(entry.startBooleanToggle(Component.literal("TTS 활성화"), TTSConfig.enabled).setDefaultValue(true).setSaveConsumer(v -> TTSConfig.enabled = v).build());
             basic.addEntry(entry.startStringDropdownMenu(Component.literal("TTS 엔진"), TTSConfig.engine).setSelections(engines).setDefaultValue("Edge 여").setSuggestionMode(false).setSaveConsumer(v -> TTSConfig.engine = v).build());
             basic.addEntry(entry.startIntSlider(Component.literal("속도 (Google 엔진은 적용 안됨)"), TTSConfig.speed, -50, 50).setDefaultValue(0).setSaveConsumer(v -> TTSConfig.speed = v).build());
             basic.addEntry(entry.startIntSlider(Component.literal("볼륨"), (int)(TTSConfig.volume * 100), 0, 100).setDefaultValue(100).setTextGetter(v -> Component.literal(v + "%")).setSaveConsumer(v -> TTSConfig.volume = v / 100.0f).build());
