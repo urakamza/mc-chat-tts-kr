@@ -16,22 +16,58 @@
 1. [Fabric Loader](https://fabricmc.net/use/installer/) 설치
 2. 아래 의존성 모드를 mods 폴더에 추가
    - [Fabric API](https://modrinth.com/mod/fabric-api)
-   - [Cloth Config](https://modrinth.com/mod/cloth-config)
-   - [Mod Menu](https://modrinth.com/mod/modmenu)
+   - [Mod Menu](https://modrinth.com/mod/modmenu) (선택)
 3. MC Chat TTS KR jar를 mods 폴더에 추가
 
 ## 사용법
 
-- 게임 내 **Mod Menu → MC Chat TTS** 에서 설정 가능
-- 키 설정: **설정 → 키 설정 → MC Chat TTS**
-- 기본 키: 스킵 `End`, 전체 중단 `Home`
+- F9키, 또는 **Mod Menu → MC Chat TTS** 에서 설정 가능
+- 기본 키: 설정 `F9`, 스킵 `End`, 전체 중단 `Home`
 
 ## 요구사항
 
-- Minecraft 26.1
+- Minecraft 26.1 ~ 26.3
 - Java 25
-- Fabric Loader 0.18.5 이상
+- Fabric Loader
 
 ## 라이선스
+
+MIT
+
+---
+
+# MC Chat TTS KR
+
+A client-side Fabric mod that reads Minecraft chat aloud using Korean text-to-speech.
+
+## Features
+
+- Supports Edge TTS, Google TTS, and Windows SAPI
+- Username blocking and word filtering
+- Per-user voice settings
+- Volume and speech rate controls (Google TTS does not support speech rate adjustment)
+- Key bindings to skip the current message or stop all speech
+- Option to skip repeated usernames in consecutive messages
+
+## Installation
+
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/).
+2. Add the following mods to your `mods` folder:
+   - [Fabric API](https://modrinth.com/mod/fabric-api) (required)
+   - [Mod Menu](https://modrinth.com/mod/modmenu) (optional)
+3. Add the MC Chat TTS KR JAR file to your `mods` folder.
+
+## Usage
+
+- Press **F9**, or open **Mod Menu → MC Chat TTS**, to access the settings.
+- Default key bindings: Settings `F9`, Skip `End`, Stop All `Home`.
+
+## Requirements
+
+- Minecraft 26.1–26.3
+- Java 25
+- Fabric Loader
+
+## License
 
 MIT

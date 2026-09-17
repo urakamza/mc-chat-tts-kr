@@ -1,21 +1,29 @@
 package kr.urakamza.mcchattts.tts;
 
 import kr.urakamza.mcchattts.MCChatTTS;
-import okhttp3.*;
-
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class EdgeTTSEngine {
-
     private static final String VOICE_MALE        = "ko-KR-InJoonNeural";
     private static final String VOICE_FEMALE      = "ko-KR-SunHiNeural";
     private static final String TOKEN             = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
@@ -26,11 +34,12 @@ public class EdgeTTSEngine {
         "wss://speech.platform.bing.com/consumer/speech/synthesize/" +
         "readaloud/edge/v1?TrustedClientToken=" + TOKEN;
 
-    private static final OkHttpClient CLIENT = new OkHttpClient.Builder()
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build();
+
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5)).build();
 
     public static byte[] synthesize(String text, String engineName, int speed) {
+        if (Thread.currentThread().isInterrupted()) return null;
         String voice    = engineName.contains("남") ? VOICE_MALE : VOICE_FEMALE;
         String speedStr = (speed >= 0 ? "+" : "") + speed + "%";
         String connId   = UUID.randomUUID().toString().replace("-", "").toUpperCase();
@@ -54,119 +63,136 @@ public class EdgeTTSEngine {
             + "&Sec-MS-GEC=" + secMsGec
             + "&Sec-MS-GEC-Version=" + SEC_MS_GEC_VER;
 
-        Request request = new Request.Builder()
-            .url(url)
-            .header("Origin", "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold")
-            .header("Pragma", "no-cache")
-            .header("Cache-Control", "no-cache")
-            .header("Accept-Encoding", "gzip, deflate, br")
-            .header("Accept-Language", "en-US,en;q=0.9")
-            .header("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "Chrome/" + CHROMIUM_MAJOR + ".0.0.0 Safari/537.36 " +
-                "Edg/" + CHROMIUM_MAJOR + ".0.0.0")
-            .build();
 
-        ByteArrayOutputStream audioOut = new ByteArrayOutputStream();
-        CountDownLatch latch = new CountDownLatch(1);
-        boolean[] success = {false};
+        String config =
+            "X-Timestamp:" + ts + "\r\n" +
+            "Content-Type:application/json; charset=utf-8\r\n" +
+            "Path:speech.config\r\n\r\n" +
+            "{\"context\":{\"synthesis\":{\"audio\":{" +
+            "\"metadataoptions\":{" +
+            "\"sentenceBoundaryEnabled\":\"false\"," +
+            "\"wordBoundaryEnabled\":\"false\"}," +
+            "\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}";
+        String request =
+            "X-RequestId:" + reqId + "\r\n" +
+            "Content-Type:application/ssml+xml\r\n" +
+            "X-Timestamp:" + ts + "\r\n" +
+            "Path:ssml\r\n\r\n" + ssml;
 
-        WebSocket ws = CLIENT.newWebSocket(request, new WebSocketListener() {
-            @Override
-            public void onOpen(WebSocket ws, Response response) {
-                // 1) speech.config
-                String cfg =
-                    "X-Timestamp:" + ts + "\r\n" +
-                    "Content-Type:application/json; charset=utf-8\r\n" +
-                    "Path:speech.config\r\n\r\n" +
-                    "{\"context\":{\"synthesis\":{\"audio\":{" +
-                    "\"metadataoptions\":{" +
-                    "\"sentenceBoundaryEnabled\":\"false\"," +
-                    "\"wordBoundaryEnabled\":\"false\"}," +
-                    "\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}";
-                ws.send(cfg);
-
-                // 2) ssml
-                String ssmlMsg =
-                    "X-RequestId:" + reqId + "\r\n" +
-                    "Content-Type:application/ssml+xml\r\n" +
-                    "X-Timestamp:" + ts + "\r\n" +
-                    "Path:ssml\r\n\r\n" + ssml;
-                ws.send(ssmlMsg);
-            }
-
-            @Override
-            public void onMessage(WebSocket ws, String text) {
-                if (text.contains("Path:turn.end")) {
-                    success[0] = true;
-                    latch.countDown();
-                }
-            }
-
-            @Override
-            public void onMessage(WebSocket ws, okio.ByteString bytes) {
-                byte[] data = bytes.toByteArray();
-                
-                if (data.length < 2) return;
-                int headerLen = ((data[0] & 0xFF) << 8) | (data[1] & 0xFF);
-                
-                if (data.length < 2 + headerLen) return;
-                
-                // 헤더 텍스트 파싱
-                String header = new String(data, 2, headerLen, StandardCharsets.UTF_8);
-                
-                // 헤더에 Path:audio 가 있으면 나머지가 오디오 데이터
-                if (header.contains("Path:audio")) {
-                    int audioStart = 2 + headerLen;
-                    if (audioStart < data.length) {
-                        audioOut.write(data, audioStart, data.length - audioStart);
-                    }
-                }
-            }
-
-            @Override
-            public void onFailure(WebSocket ws, Throwable t, Response response) {
-                MCChatTTS.LOGGER.error("Edge TTS 연결 실패: {} (HTTP {})",
-                    t.getMessage(),
-                    response != null ? response.code() : "N/A");
-                latch.countDown();
-            }
-
-            @Override
-            public void onClosed(WebSocket ws, int code, String reason) {
-                latch.countDown();
-            }
-        });
-
+        CompletableFuture<byte[]> audio = new CompletableFuture<>();
+        AtomicBoolean finished = new AtomicBoolean();
+        AtomicReference<WebSocket> socket = new AtomicReference<>();
+        CompletableFuture<WebSocket> connecting = null;
         try {
-            boolean ok = latch.await(15, TimeUnit.SECONDS);
-            ws.close(1000, null);
+            connecting = CLIENT.newWebSocketBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .header("Origin", "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold")
+                .header("Pragma", "no-cache")
+                .header("Cache-Control", "no-cache")
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + CHROMIUM_MAJOR +
+                    ".0.0.0 Safari/537.36 Edg/" + CHROMIUM_MAJOR + ".0.0.0")
+                .buildAsync(URI.create(url), new WebSocket.Listener() {
+                    private final StringBuilder textParts = new StringBuilder();
+                    private final ByteArrayOutputStream binaryParts = new ByteArrayOutputStream();
+                    private final ByteArrayOutputStream audioBytes = new ByteArrayOutputStream();
 
-            if (!ok || !success[0]) {
-                MCChatTTS.LOGGER.warn("Edge TTS 실패 또는 타임아웃");
-                return null;
-            }
+                    @Override
+                    public void onOpen(WebSocket ws) {
+                        socket.set(ws);
+                        if (finished.get()) ws.abort();
+                        else ws.request(1);
+                    }
 
-            byte[] result = audioOut.toByteArray();
-            return result.length > 0 ? result : null;
+                    @Override
+                    public CompletionStage<?> onText(WebSocket ws, CharSequence data, boolean last) {
+                        if (finished.get() || audio.isDone()) return null;
+                        textParts.append(data);
+                        if (last) {
+                            String message = textParts.toString();
+                            textParts.setLength(0);
+                            if (message.contains("Path:turn.end")) audio.complete(audioBytes.toByteArray());
+                        }
+                        ws.request(1);
+                        return null;
+                    }
 
+                    @Override
+                    public CompletionStage<?> onBinary(WebSocket ws, ByteBuffer data, boolean last) {
+                        if (finished.get() || audio.isDone()) return null;
+                        byte[] fragment = new byte[data.remaining()];
+                        data.get(fragment);
+                        binaryParts.writeBytes(fragment);
+                        if (last) {
+                            // JDK callbacks can split one Edge message into several fragments.
+                            byte[] message = binaryParts.toByteArray();
+                            binaryParts.reset();
+                            if (message.length < 2) {
+                                audio.completeExceptionally(new IOException("Edge TTS binary header is missing"));
+                            } else {
+                                int headerLength = ((message[0] & 0xFF) << 8) | (message[1] & 0xFF);
+                                int start = 2 + headerLength;
+                                if (start > message.length) {
+                                    audio.completeExceptionally(new IOException("Edge TTS binary header is incomplete"));
+                                } else {
+                                    String header = new String(message, 2, headerLength, StandardCharsets.UTF_8);
+                                    if (header.contains("Path:audio"))
+                                        audioBytes.write(message, start, message.length - start);
+                                }
+                            }
+                        }
+                        ws.request(1);
+                        return null;
+                    }
+
+                    @Override
+                    public CompletionStage<?> onClose(WebSocket ws, int statusCode, String reason) {
+                        audio.completeExceptionally(new IOException("Edge TTS closed before completion: " + statusCode));
+                        return null;
+                    }
+
+                    @Override
+                    public void onError(WebSocket ws, Throwable error) {
+                        audio.completeExceptionally(error);
+                    }
+                });
+
+            // JDK WebSocket permits only one outstanding text send at a time.
+            connecting.thenCompose(ws -> {
+                if (finished.get()) {
+                    ws.abort();
+                    return CompletableFuture.completedFuture(ws);
+                }
+                return ws.sendText(config, true);
+            }).thenCompose(ws -> {
+                if (finished.get()) return CompletableFuture.completedFuture(ws);
+                return ws.sendText(request, true);
+            }).whenComplete((ws, error) -> {
+                if (error != null) audio.completeExceptionally(error);
+            });
+
+            byte[] result = audio.get(15, TimeUnit.SECONDS);
+            return result.length == 0 ? null : result;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
+        } catch (TimeoutException e) {
+            MCChatTTS.LOGGER.warn("Edge TTS 타임아웃");
+            return null;
+        } catch (ExecutionException e) {
+            MCChatTTS.LOGGER.error("Edge TTS 실패: {}", e.getCause().toString());
+            return null;
+        } catch (Exception e) {
+            MCChatTTS.LOGGER.error("Edge TTS 실패: {}", e.getMessage());
+            return null;
+        } finally {
+            finished.set(true);
+            if (connecting != null && !connecting.isDone()) connecting.cancel(true);
+            WebSocket ws = socket.get();
+            if (ws != null) ws.abort();
         }
     }
-
-    // private static int indexOf(byte[] data, byte[] pattern) {
-    //     outer:
-    //     for (int i = 0; i <= data.length - pattern.length; i++) {
-    //         for (int j = 0; j < pattern.length; j++) {
-    //             if (data[i + j] != pattern[j]) continue outer;
-    //         }
-    //         return i;
-    //     }
-    //     return -1;
-    // }
 
     private static String generateSecMsGec() {
         try {

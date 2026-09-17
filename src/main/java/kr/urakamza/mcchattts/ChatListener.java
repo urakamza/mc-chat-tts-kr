@@ -19,12 +19,18 @@ public class ChatListener {
         ClientReceiveMessageEvents.CHAT.register(
             (message, signedMessage, sender, params, receptionTimestamp) -> {
                 if(!TTSConfig.enabled) return;
+                // The profile identifies the player independently of the displayed chat format.
+                if (sender != null) {
+                    String body = signedMessage != null
+                        ? signedMessage.decoratedContent().getString() : message.getString();
+                    handleChat(sender.name(), body);
+                    return;
+                }
+                // Keep compatibility with unsigned messages without a sender profile.
                 String raw = message.getString();
-                Matcher m = CHAT_PATTERN.matcher(raw);
-                if (m.find()) {
-                    String nick = m.group(1).replaceAll("\\[.*?]", "").strip();
-                    String chat = m.group(2).strip();
-                    handleChat(nick, chat);
+                if (!handleLegacyChat(raw)) {
+                    handleChat(null, signedMessage != null
+                        ? signedMessage.decoratedContent().getString() : raw);
                 }
             });
 
@@ -35,53 +41,38 @@ public class ChatListener {
             String msg = message.getString();
 
             // <닉네임> 형식이면 일반 채팅으로 처리
-            Matcher m = CHAT_PATTERN.matcher(msg);
-            if (m.find()) {
-                String nick = m.group(1).replaceAll("\\[.*?]", "").strip();
-                String chat = m.group(2).strip();
-                handleChat(nick, chat);
-                return;
-            }
+            if (handleLegacyChat(msg)) return;
 
             // 나머지는 시스템 메시지
             if (!TTSConfig.readSystem) return;
-            msg = TextProcessor.process(msg);
+            msg = TextProcessor.processSystemMessage(TextProcessor.applyWordFilter(msg));
             if (msg.isBlank()) return;
             TTSManager.enqueue(msg, null, TTSConfig.speed);
         });
     }
 
+    private static boolean handleLegacyChat(String message) {
+        Matcher match = CHAT_PATTERN.matcher(message);
+        if (!match.find()) return false;
+        String nick = match.group(1).replaceAll("\\[.*?]", "").strip();
+        handleChat(nick, match.group(2).strip());
+        return true;
+    }
+
     private static void handleChat(String nick, String chat) {
-        if(!TTSConfig.enabled) return;
-        // 닉네임 필터
-        if (!TTSConfig.nicknameFilter.isEmpty()) {
-            String nickLower = nick.toLowerCase();
-            boolean blocked = TTSConfig.nicknameFilter.stream()
-                .anyMatch(f -> f.toLowerCase().equals(nickLower));
-            if (blocked) return;
-        }
-
-        // 단어 필터
+        if (!TTSConfig.enabled || chat.isBlank()) return;
+        // Case-sensitive identity comparisons happen before any pronunciation transforms.
+        if (nick != null && TTSConfig.nicknameFilter.stream().anyMatch(nick::equals)) return;
         chat = TextProcessor.applyWordFilter(chat);
-
-        // 로그용 원본 보존
-        // String logNick = nick;
-        // String logChat = chat;
-
-        // 소문자 변환
-        if (TTSConfig.forceLower) {
-            nick = nick.toLowerCase();
-            chat = chat.toLowerCase();
-        }
 
         // 이름 읽기
         String finalText;
         long now = System.currentTimeMillis();
 
-        if (TTSConfig.readNick) {
+        if (TTSConfig.readNick && nick != null && !nick.isBlank()) {
             if (TTSConfig.skipRepeatNick) {
                 long timeout = TTSConfig.nickTimeout * 1000L;
-                boolean sameUser = nick.equalsIgnoreCase(lastNick);
+                boolean sameUser = nick.equals(lastNick);
                 boolean withinTime = (now - lastNickTime) <= timeout;
                 finalText = (sameUser && withinTime) ? chat : nick + ", " + chat;
             } else {

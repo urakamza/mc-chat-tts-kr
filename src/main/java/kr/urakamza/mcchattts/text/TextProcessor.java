@@ -3,6 +3,9 @@ package kr.urakamza.mcchattts.text;
 import kr.urakamza.mcchattts.TTSConfig;
 
 import java.util.Map;
+import java.util.Comparator;
+import java.util.Locale;
+import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -25,8 +28,8 @@ public class TextProcessor {
         Map.entry("ㅢ", "의")
     );
 
-    private static final Pattern COORD_PATTERN =
-        Pattern.compile("(?<![\\d.])(\\d+)\\.\\d+(?![\\d.])");
+    private static final Pattern SYSTEM_DECIMAL_PATTERN =
+        Pattern.compile("(?<![\\d.])(\\d+\\.\\d)\\d+(?!\\d|\\.\\d)");
     private static final Pattern REPEAT_PATTERN =
         Pattern.compile("(.)\\1{3,}");
 
@@ -37,26 +40,37 @@ public class TextProcessor {
     private static final Pattern JOSA_GWAWA  = Pattern.compile("과\\(와\\)");
     private static final Pattern JOSA_EURO   = Pattern.compile("\\(으\\)로");
 
-    /** 채팅 텍스트 전체 후처리 */
+    /** 일반 채팅 후처리: 소수 자릿수는 줄이지 않는다. */
     public static String process(String text) {
+        return process(text, false);
+    }
+
+    /** 시스템 메시지만 소수점 아래 첫째 자리까지 유지한다. */
+    public static String processSystemMessage(String text) {
+        return process(text, true);
+    }
+
+    private static String process(String text, boolean systemMessage) {
+        if (systemMessage && TTSConfig.removeCoord) text = shortenSystemDecimals(text);
         text = fixJosa(text);
-        if (TTSConfig.forceLower)   text = text.toLowerCase();
-        if (TTSConfig.removeCoord)  text = removeCoords(text);
+        if (TTSConfig.forceLower)   text = text.toLowerCase(Locale.ROOT);
         if (TTSConfig.useJamo)      text = replaceJamo(text);
         if (TTSConfig.partialRead)  text = reduceRepeats(text);
         if (TTSConfig.trimLong)     text = trim(text);
         return text;
     }
 
-    /** 단어 필터 적용 */
+    /** Literal, case-insensitive matches; longest terms win and replacements are not filtered again. */
     public static String applyWordFilter(String text) {
-        if (!TTSConfig.wordFilter.isEmpty()) {
-            for (String word : TTSConfig.wordFilter) {
-                if (word.isBlank()) continue;
-                text = text.replace(word, makeBeep(word));
-            }
-        }
-        return text;
+        String alternatives = TTSConfig.wordFilter.stream()
+            .filter(word -> word != null && !word.isBlank())
+            .distinct()
+            .sorted(Comparator.comparingInt(String::length).reversed())
+            .map(Pattern::quote)
+            .collect(Collectors.joining("|"));
+        if (alternatives.isEmpty()) return text;
+        Pattern filter = Pattern.compile(alternatives, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        return filter.matcher(text).replaceAll(match -> Matcher.quoteReplacement(makeBeep(match.group())));
     }
 
     private static String fixJosa(String text) {
@@ -112,8 +126,9 @@ public class TextProcessor {
         return text;
     }
 
-    private static String removeCoords(String text) {
-        return COORD_PATTERN.matcher(text).replaceAll("$1");
+    // Text replacement truncates without rounding and preserves signs and trailing .0.
+    private static String shortenSystemDecimals(String text) {
+        return SYSTEM_DECIMAL_PATTERN.matcher(text).replaceAll("$1");
     }
 
     private static String replaceJamo(String text) {

@@ -3,6 +3,7 @@ package kr.urakamza.mcchattts.tts;
 import kr.urakamza.mcchattts.MCChatTTS;
 
 import java.net.URI;
+import java.time.Duration;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -10,6 +11,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 
 public class GoogleTTSEngine {
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5)).build();
 
     public static byte[] synthesize(String text) {
         if (text.length() > 200) {
@@ -20,14 +23,14 @@ public class GoogleTTSEngine {
             String url = "https://translate.google.com/translate_tts?ie=UTF-8" +
                          "&q=" + encoded + "&tl=ko&client=tw-ob";
 
-            HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(15))
                 .header("User-Agent", "Mozilla/5.0")
                 .GET()
                 .build();
 
-            HttpResponse<byte[]> response = client.send(request,
+            HttpResponse<byte[]> response = CLIENT.send(request,
                 HttpResponse.BodyHandlers.ofByteArray());
 
             if (response.statusCode() == 200) {
@@ -36,6 +39,9 @@ public class GoogleTTSEngine {
                 MCChatTTS.LOGGER.error("Google TTS HTTP 오류: {}", response.statusCode());
                 return null;
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
         } catch (Exception e) {
             MCChatTTS.LOGGER.error("Google TTS 실패: {}", e.getMessage());
             return null;

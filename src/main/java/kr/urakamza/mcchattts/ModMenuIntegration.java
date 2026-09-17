@@ -5,17 +5,11 @@ import com.terraformersmc.modmenu.api.ModMenuApi;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 
+/** Optional integration: only Mod Menu invokes this entrypoint. */
 @Environment(EnvType.CLIENT)
-public class ModMenuIntegration implements ModMenuApi {
+public final class ModMenuIntegration implements ModMenuApi {
     @Override
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
-        return parent -> {
-            try {
-                return TTSConfigScreen.create(parent);
-            } catch (Exception e) {
-                return parent;
-            }
-        };
+        return TTSConfigScreen::create;
     }
 }
-

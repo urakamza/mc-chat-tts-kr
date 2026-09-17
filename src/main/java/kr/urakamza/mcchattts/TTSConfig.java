@@ -33,11 +33,13 @@ public class TTSConfig {
     public static boolean forceLatest = false;     // 새 채팅 우선모드
     public static List<String> nicknameFilter = new ArrayList<>();
     public static List<String> wordFilter = new ArrayList<>();
-    public static List<String> sapiVoices = new ArrayList<>();
+    public static volatile List<String> sapiVoices = List.of();
     public static Map<String, String> userVoices = new HashMap<>();
     
 
     public static void load() {
+        // Discovery must also run when the config is missing, empty, or malformed.
+        loadSapiVoices();
         if (!Files.exists(CONFIG_PATH)) {
             save();
             return;
@@ -62,21 +64,24 @@ public class TTSConfig {
             smartQueue     = data.smartQueue;
             maxQueue       = data.maxQueue;
             forceLatest    = data.forceLatest;
-            sapiVoices = new ArrayList<>();
-            Thread sapiThread = new Thread(() -> {
-                MCChatTTS.LOGGER.info("SAPI 음성 목록 로드 시작...");
-                List<String> voices = kr.urakamza.mcchattts.tts.SAPIEngine.getVoices();
-                MCChatTTS.LOGGER.info("SAPI 음성 목록 결과: {}개 - {}", voices.size(), voices);
-                if (!voices.isEmpty()) sapiVoices = voices;
-            }, "SAPI-Voice-Loader");
-            sapiThread.setDaemon(true);
-            sapiThread.start();
             if (data.nicknameFilter != null) nicknameFilter = data.nicknameFilter;
             if (data.wordFilter != null)     wordFilter     = data.wordFilter;
             if (data.userVoices != null) userVoices = data.userVoices;
         } catch (Exception e) {
             MCChatTTS.LOGGER.error("설정 로드 실패: {}", e.getMessage());
         }
+    }
+
+    private static void loadSapiVoices() {
+        sapiVoices = List.of();
+        if (!kr.urakamza.mcchattts.tts.SAPIEngine.isSupported()) return;
+        Thread thread = new Thread(() -> {
+            List<String> voices = kr.urakamza.mcchattts.tts.SAPIEngine.getVoices();
+            sapiVoices = List.copyOf(voices);
+            MCChatTTS.LOGGER.info("SAPI 음성 목록 로드: {}개", voices.size());
+        }, "SAPI-Voice-Loader");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     public static void save() {
